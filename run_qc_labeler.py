@@ -14,7 +14,7 @@ if __name__ == "__main__":
     params = QCParams(
         mc_thresh=mc_thresh,
         nc_thresh=nc_thresh,
-        amp_thresh_uv=amp_thresh_uv,  # ✅ 3e critère
+        amp_thresh_uv=amp_thresh_uv,  
         page_size=12,
         dtype=np.int16
     )
