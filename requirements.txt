@@ -1,0 +1,26 @@
+# Core scientific
+numpy==1.26.4
+scipy==1.12.0
+pandas==2.3.3
+matplotlib==3.10.7
+
+# Ephys / IBL
+kilosort==4.0.21
+mtscomp==1.0.2
+ibllib==3.4.1
+iblatlas==0.10.0
+ONE-api==3.4.1
+phylib==2.6.3
+probeinterface==0.3.1
+neo==0.14.3
+
+# SpikeInterface (pinned to your commit)
+spikeinterface @ git+https://github.com/SpikeInterface/spikeinterface.git@932ef0cb51791a3f92955142a5015e5b89f8b600
+
+# ALF export tool
+iblapps @ git+https://github.com/int-brain-lab/iblapps.git@fb14ff01a77472a4332926be91f5250eb45e56bf
+
+
+# QC GUI
+PyQt5==5.15.11
+pyqtgraph==0.13.7
