@@ -100,6 +100,11 @@ def plot_good_spikes_heatmap_with_regions(
     labels["cluster_id"] = labels["cluster_id"].astype(int)
     good_ids = labels.loc[labels["label"] == "good", "cluster_id"].to_numpy(dtype=int)
 
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    # MODIF: nombre de good units (pour l'afficher dans le titre)
+    n_good = int(good_ids.size)
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
     # ============================================================
     # Load spikes
     # ============================================================
@@ -287,7 +292,12 @@ def plot_good_spikes_heatmap_with_regions(
     ax_hm = fig.add_subplot(gs[0, 0])
     ax_den = fig.add_subplot(gs[0, 1], sharey=ax_hm)
 
-    ax_hm.set_title(title if title else alf_probe.name, pad=8)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    # MODIF: titre + nb good units (avec "-")
+    base_title = title if title else alf_probe.name
+    ax_hm.set_title(f"{base_title} - Good units: {n_good}", pad=8)
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
     ax_den.set_title(density_title, pad=8)
 
     # ----------------------------
