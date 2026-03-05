@@ -21,7 +21,7 @@ def plot_good_spikes_heatmap_with_regions(
     # ------------------------------------------------------------
     # DEPTH CONVENTION
     # ------------------------------------------------------------
-    depth_max: float = 4000.0,  # µm from tip; display 0 bottom, depth_max top
+    depth_max: float = 4000.0,
 
     # ------------------------------------------------------------
     # HEATMAP (high resolution)
@@ -41,19 +41,19 @@ def plot_good_spikes_heatmap_with_regions(
     # ------------------------------------------------------------
     # RAIL HEATMAP (in negative time, BEFORE t=0)
     # ------------------------------------------------------------
-    hm_rail_time_frac: float = 0.05,   # rail width as fraction of heatmap time span
+    hm_rail_time_frac: float = 0.05,
     rail_alpha: float = 0.92,
 
     # ------------------------------------------------------------
     # DENSITY (good units)
     # ------------------------------------------------------------
     depth_bins: int = 140,
-    depth_smooth_sigma: float = 0.9,
+    depth_smooth_sigma: float = 1.25,
     density_line_lw: float = 2.4,
-    density_fill_alpha: float = 0.20,
+    density_fill_alpha: float = 0.28,
 
     # Density rail (strictly on [-den_rail_width, 0])
-    den_rail_width: float = 0.28,      # curve is on [0..1]
+    den_rail_width: float = 0.28,
     den_rail_alpha: float = 0.92,
 
     # ------------------------------------------------------------
@@ -65,7 +65,7 @@ def plot_good_spikes_heatmap_with_regions(
     separator_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
 
     region_label: bool = True,
-    region_label_fontsize: int = 9,
+    region_label_fontsize: int = 8,
     region_label_min_height_um: float = 120.0,
 
     # ------------------------------------------------------------
@@ -75,15 +75,23 @@ def plot_good_spikes_heatmap_with_regions(
     dpi: int = 150,
     title: Optional[str] = None,
     density_title: str = "Good unit density",
+
+    # ------------------------------------------------------------
+    # CLEAN DISPLAY: counts left of rail + title in rail
+    # ------------------------------------------------------------
+    show_good_unit_counts: bool = True,
+    count_fontsize: int = 9,
+    count_pad: float = 0.16,
+    count_text_x_nudge: float = -0.02,
+    show_density_title_in_rail: bool = True,
+    density_title_fontsize: int = 9,
+
+    # ------------------------------------------------------------
+    # Colorbar sizing (heatmap)
+    # ------------------------------------------------------------
+    cbar_fraction: float = 0.075,
+    cbar_pad: float = 0.02,
 ) -> Tuple[plt.Figure, Dict[str, plt.Axes]]:
-    """
-    - Heatmap: GOOD spikes only, high-res, lightly smoothed
-    - Heatmap region rail is drawn in negative time (before t=0), so it never overlaps heatmap
-      and sits just to the right of the Y-axis.
-    - Density rail is drawn strictly on x in [-den_rail_width, 0] with NO HOLES
-      (regions are filled for all depths using ffill/bfill).
-    - Density curve is a single colored line (per-region segments), no double line.
-    """
 
     alf_probe = Path(alf_probe)
     depth_max = float(depth_max)
@@ -100,10 +108,7 @@ def plot_good_spikes_heatmap_with_regions(
     labels["cluster_id"] = labels["cluster_id"].astype(int)
     good_ids = labels.loc[labels["label"] == "good", "cluster_id"].to_numpy(dtype=int)
 
-    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    # MODIF: nombre de good units (pour l'afficher dans le titre)
     n_good = int(good_ids.size)
-    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
     # ============================================================
     # Load spikes
@@ -256,6 +261,7 @@ def plot_good_spikes_heatmap_with_regions(
     if dens.max() > 0:
         dens /= dens.max()
 
+    # smoothing
     if depth_smooth_sigma > 0:
         sigma = float(depth_smooth_sigma)
         half = int(np.ceil(3 * sigma))
@@ -267,7 +273,22 @@ def plot_good_spikes_heatmap_with_regions(
             dens /= dens.max()
 
     # ============================================================
-    # Fill holes in region assignment along y_centers (NO holes in rail)
+    # Count GOOD units per region
+    # ============================================================
+    good_units_per_region: Dict[str, int] = {}
+    if segments and good_unit_depths.size:
+        def _region_at_depth(y0: float) -> str:
+            for a, b, r in segments:
+                if (y0 >= a) and (y0 <= b):
+                    return r
+            return "UNK"
+
+        for y0 in good_unit_depths:
+            rr = _region_at_depth(float(y0))
+            good_units_per_region[rr] = good_units_per_region.get(rr, 0) + 1
+
+    # ============================================================
+    # Fill holes in region assignment along y_centers (NO holes)
     # ============================================================
     def region_per_depth(y: np.ndarray) -> np.ndarray:
         lab = np.array([None] * y.size, dtype=object)
@@ -279,7 +300,7 @@ def plot_good_spikes_heatmap_with_regions(
 
     lab_y = region_per_depth(y_centers)
 
-    # boundaries from changes (for clean separators)
+    # boundaries from changes (for separators)
     change = np.flatnonzero(lab_y[1:] != lab_y[:-1])
     bounds = [0.5 * (y_centers[i] + y_centers[i + 1]) for i in change]
 
@@ -292,13 +313,9 @@ def plot_good_spikes_heatmap_with_regions(
     ax_hm = fig.add_subplot(gs[0, 0])
     ax_den = fig.add_subplot(gs[0, 1], sharey=ax_hm)
 
-    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    # MODIF: titre + nb good units (avec "-")
     base_title = title if title else alf_probe.name
     ax_hm.set_title(f"{base_title} - Good units: {n_good}", pad=8)
-    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-    ax_den.set_title(density_title, pad=8)
+    ax_den.set_title("", pad=8)
 
     # ----------------------------
     # Heatmap
@@ -315,30 +332,29 @@ def plot_good_spikes_heatmap_with_regions(
         zorder=1,
     )
 
-    # Extend xlim to show negative-time rail area (before t=0)
     rail_t = float(hm_rail_time_frac) * tmax
     ax_hm.set_xlim(-rail_t, tmax)
 
     ax_hm.set_xlabel(xlabel)
     ax_hm.set_ylabel("Depth from tip (µm)")
-    ax_hm.spines["top"].set_visible(False)
-    ax_hm.spines["right"].set_visible(False)
 
-    cbar = fig.colorbar(im, ax=ax_hm, fraction=0.030, pad=0.015)
+    # remove spines
+    for sp in ["top", "right", "left", "bottom"]:
+        ax_hm.spines[sp].set_visible(False)
+
+    cbar = fig.colorbar(im, ax=ax_hm, fraction=float(cbar_fraction), pad=float(cbar_pad))
     cbar.outline.set_visible(False)
     cbar.set_label("Good spike count (log)")
 
-    # ----------------------------
-    # Heatmap rail in NEGATIVE TIME (right of Y-axis, before t=0)
-    # ----------------------------
+    # Heatmap rail (negative time)
     if segments:
         for a, b, r in segments:
             col = region_colors.get(r, (0.7, 0.7, 0.7))
             ax_hm.add_patch(
                 Rectangle(
-                    (-rail_t, a),  # x start (negative time), y start
-                    rail_t,        # width
-                    (b - a),       # height
+                    (-rail_t, a),
+                    rail_t,
+                    (b - a),
                     facecolor=col,
                     edgecolor="none",
                     alpha=rail_alpha,
@@ -350,7 +366,6 @@ def plot_good_spikes_heatmap_with_regions(
             for y in bounds:
                 ax_hm.axhline(y, color=separator_color, lw=separator_lw, alpha=separator_alpha, zorder=6)
 
-        # Labels (only for large segments)
         if region_label:
             for a, b, r in segments:
                 if (b - a) < float(region_label_min_height_um):
@@ -367,15 +382,27 @@ def plot_good_spikes_heatmap_with_regions(
                 )
 
     # ----------------------------
-    # Density panel: rail ONLY up to x=0 (no overlap) + curve colored everywhere
+    # Density panel
     # ----------------------------
     ax_den.set_xlabel("Norm.")
-    ax_den.set_xlim(-float(den_rail_width), 1.02)
+    extra_left = float(count_pad) if show_good_unit_counts else 0.0
+    ax_den.set_xlim(-float(den_rail_width) - extra_left, 1.02)
     ax_den.yaxis.set_visible(False)
-    ax_den.spines["top"].set_visible(False)
-    ax_den.spines["right"].set_visible(False)
 
-    # Rail blocks based on lab_y (NO HOLES)
+    for sp in ["top", "right", "left", "bottom"]:
+        ax_den.spines[sp].set_visible(False)
+
+    # separators ONLY on rail
+    xlim0, xlim1 = ax_den.get_xlim()
+    span = (xlim1 - xlim0) if (xlim1 > xlim0) else 1.0
+    rail_x0 = -float(den_rail_width)
+    rail_x1 = 0.0
+    rail_frac0 = float(np.clip((rail_x0 - xlim0) / span, 0.0, 1.0))
+    rail_frac1 = float(np.clip((rail_x1 - xlim0) / span, 0.0, 1.0))
+
+    # ----------------------------
+    # Rail blocks + labels + counts
+    # ----------------------------
     start = 0
     while start < y_centers.size:
         rr = lab_y[start]
@@ -387,38 +414,111 @@ def plot_good_spikes_heatmap_with_regions(
 
         y0 = edges[start]
         y1 = edges[end] if end < edges.size else edges[-1]
+        ymid = 0.5 * (y0 + y1)
 
         ax_den.fill_betweenx([y0, y1], -float(den_rail_width), 0.0, color=col, alpha=den_rail_alpha, linewidth=0, zorder=1)
 
         if region_label and (y1 - y0) >= float(region_label_min_height_um):
             ax_den.text(
-                -float(den_rail_width) + 0.02, 0.5 * (y0 + y1), rr,
+                -float(den_rail_width) + 0.02, ymid, rr,
                 ha="left", va="center",
                 fontsize=region_label_fontsize,
                 color="white",
                 bbox=dict(boxstyle="round,pad=0.15", fc=(*col, 0.92), ec="none"),
-                zorder=3,
+                zorder=4,
+            )
+
+        if show_good_unit_counts and (y1 - y0) >= float(region_label_min_height_um):
+            n_rr = int(good_units_per_region.get(rr, 0))
+            x_count = -float(den_rail_width) - extra_left + 0.01 + float(count_text_x_nudge)
+            ax_den.text(
+                x_count, ymid, f"{n_rr}",
+                ha="left", va="center",
+                fontsize=int(count_fontsize),
+                color="white",
+                bbox=dict(boxstyle="round,pad=0.12", fc=(0, 0, 0, 0.45), ec="none"),
+                zorder=5,
             )
 
         start = end
 
     if show_separators:
         for y in bounds:
-            ax_den.axhline(y, color=separator_color, lw=separator_lw, alpha=separator_alpha, zorder=2)
+            ax_den.axhline(
+                y,
+                xmin=rail_frac0,
+                xmax=rail_frac1,
+                color=separator_color,
+                lw=separator_lw,
+                alpha=separator_alpha,
+                zorder=2,
+            )
 
-    # Base faint fill (x>=0)
-    ax_den.fill_betweenx(y_centers, 0.0, dens, color="black", alpha=float(density_fill_alpha), linewidth=0, zorder=4)
+    # title inside rail
+    if show_density_title_in_rail:
+        ax_den.text(
+            -float(den_rail_width) + 0.02,
+            depth_max + 0.03 * depth_max,
+            density_title,
+            ha="left", va="top",
+            fontsize=int(density_title_fontsize),
+            color="white",
+            bbox=dict(boxstyle="round,pad=0.18", fc=(0, 0, 0, 0.35), ec="none"),
+            zorder=8,
+        )
+    else:
+        ax_den.set_title(density_title, pad=8)
 
-    # Curve colored by region (ONE LINE ONLY)
+    # ============================================================
+    # NO-HOLES DENSITY:
+    # 1) draw continuous curve once (guarantees continuity)
+    # 2) draw colored segments with 1-point overlap at boundaries
+    # ============================================================
+
+    # continuous "base" curve (very subtle) -> ensures no visible gaps
+    ax_den.plot(
+        dens,
+        y_centers,
+        lw=float(density_line_lw),
+        color=(0, 0, 0, 0.22),
+        zorder=3,
+        solid_capstyle="round",
+        solid_joinstyle="round",
+    )
+
+    # colored fill + colored curve by region, WITH overlap
     start = 0
-    while start < y_centers.size:
+    n = y_centers.size
+    while start < n:
         rr = lab_y[start]
         end = start + 1
-        while end < y_centers.size and lab_y[end] == rr:
+        while end < n and lab_y[end] == rr:
             end += 1
 
+        # overlap by 1 point to avoid micro-gaps at boundaries
+        end_plot = min(end + 1, n) if end < n else n
+
         col = region_colors.get(rr, (0.15, 0.15, 0.15))
-        ax_den.plot(dens[start:end], y_centers[start:end], color=col, lw=float(density_line_lw), zorder=6)
+
+        ax_den.fill_betweenx(
+            y_centers[start:end_plot],
+            0.0,
+            dens[start:end_plot],
+            color=col,
+            alpha=float(density_fill_alpha),
+            linewidth=0,
+            zorder=4,
+        )
+
+        ax_den.plot(
+            dens[start:end_plot],
+            y_centers[start:end_plot],
+            color=col,
+            lw=float(density_line_lw),
+            zorder=6,
+            solid_capstyle="round",
+            solid_joinstyle="round",
+        )
 
         start = end
 
