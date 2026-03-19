@@ -8,7 +8,7 @@ from functions.dashboard import plot_good_spikes_heatmap_with_regions
 # =========================
 
 DATA_ROOT = Path(r"F:\Data_Mice")
-SESSION_ID = "VF069_2025_12_03"
+SESSION_ID = "VF071_2025_12_18"
 PROBE = "probe00"
 
 depth_max = 4000          # 0 = tip, 4000 = surface
